@@ -8,17 +8,17 @@ $(function(){
        });
         if(list.length>0){
           $.ajax({
-              url:'/admin/user',
+              url:'/admin/cManager',
               type:'delete',
               data:{
                 list: JSON.stringify(list)
               },
               success:function(msg){
                   if(msg=="success"){
-                    location.href = '/admin/userManage/'+"delfine";
+                    location.href = '/admin/categoryManager';
                   }
               }
           });
-        };
+        }
     });
 });

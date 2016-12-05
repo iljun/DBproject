@@ -15,6 +15,9 @@ var admin =require('./routes/admin/admin');
 var flash = require('connect-flash');
 var app = express();
 var board = require('./routes/board/board');
+var cors = require('cors');
+var formidable = require('formidable');
+var mime = require('mime');
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'ejs');
@@ -26,6 +29,7 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(cookieParser('secret'));
 app.use(express.static(path.join(__dirname, 'public')));
+app.use(cors());
 /* session을 유지 하기위해 express-session 설정 */
 app.use(session({
     secret: 'keyborad cat',
@@ -54,6 +58,10 @@ app.use(function(req, res, next) {
 });
 
 // error handlers
+/*favicon 404에러때문에 추가*/
+app.get('/favicon.ico', function(req, res) {
+    res.send(200);
+});
 
 // development error handler
 // will print stacktrace

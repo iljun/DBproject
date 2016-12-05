@@ -2,21 +2,157 @@ var express = require('express');
 var router = express.Router();
 var pool = require('../../join/connection');
 var userDao = require('../../query/user/user');
+var multiparty = require('multiparty');
+var multer = require('multer');
+var fs = require('fs');
+var sequelize = require('../../join/sequelize');
+var CategoryManager = require('../../model/CategoryManager');
+var storage = multer.diskStorage({
+  destination:function(req,file,cb){
+    var path='../public/profileImage/';
+    cb(null,path)
+  },
+  filename:function(req,file,cb){
+    cb(null,req.user.id+'_Profile.jpg')
+  }
+});
+var upload = multer({storage:storage});
+
+
+
+/*session user정보를 local에 저장하여 ejs파일로
+명시적으로 넘겨주지않아도 자동적으로 넘어감 세션값 사용시 user로 꺼내쓰면됨*/
+router.use(function(req, res, next) {
+  if(req.user) res.locals.user = req.user;
+  else res.locals.user = undefined;
+  next();
+});
 
 /* GET users listing. */
 router.get('/contacts', function(req, res, next) {
-  res.render('user/contacts');
-});
-router.get('/profile',function(req,res,next){
-  res.render('user/profile');
-});
+  sequelize.authenticate().then(function(err){
+    CategoryManager.findAll({
+      where : {
+        category_id : req.user.category_id
+      }
+    })
+    .then(function(rows){
+      res.render('user/contacts',{userList:rows,msg:"",type:""});
+    });
 
-//마이페이지 회원정보수정
-router.get('/edit',function(req,res,next){
-  userDao.SelectUserInfo(req.user.id,function(rows){
-    res.render('user/edit',{ user:rows, message:req.flash('error') });
+  })
+  .catch(function(err){
+    res.send(err);
   });
 });
+router.get('/profile',function(req,res,next){
+  userDao.FindGrade(req.user.id, req.user.category_id, function(result){
+    res.render('user/profile', {user : req.user, grade : result});
+  });
+  /* res.render('user/profile');*/
+});
+
+router.get('/userGradeList/:category_id/:grade', function(req, res, next) {
+  var grade = req.params.grade;
+  var category_id = req.params.category_id;
+  var srchType = req.query.srchType;
+  var srchText = req.query.srchText;
+  if(req.query.srchType==null) srchType = 0;
+  var count = 4;
+  var param=[
+    srchType,srchText,category_id,grade,0,count
+  ];
+    userDao.selectOptions(param,function(result){
+      res.render('user/userGradeList', {user : req.user, grade : grade, userList : result[0],srchType:srchType,srchText:srchText});
+    });
+});
+/*user 검색 목록 더보기 */
+router.get('/userGradeListMore/:category_id/:grade',function(req,res,next){
+  var grade = req.params.grade;
+  var category_id = req.params.category_id;
+  var srchType = req.query.srchType;
+  var srchText = req.query.srchText;
+  var current = Number(req.query.current)+1;
+  if(req.query.srchType==null) srchType = 0;
+  var count = 3;
+  var param=[
+    srchType,srchText,category_id,grade,current,count
+  ];
+  userDao.selectOptions(param,function(result){
+    var data={};
+    if(result[0].length>0){
+      data ={
+        len : result[0].length,
+        list : result[0],
+        msg : "success"
+      };
+    }else{
+      data = {
+        msg : "noData"
+      }
+    }
+    res.json(data);
+  });
+});
+/*user manager 검색 목록 더보기 */
+router.get('/userManagerListMore/:category_id/:grade',function(req,res,next){
+  var grade = req.params.grade;
+  var category_id = req.params.category_id;
+  var srchType = req.query.srchType;
+  var srchText = req.query.srchText;
+  var current = Number(req.query.current)+1;
+  if(req.query.srchType==null) srchType = 0;
+  var count = 3;
+  var param=[
+    srchType,srchText,category_id,grade,current,count
+  ];
+  userDao.selectManagerOptions(param,function(result){
+    var data={};
+    if(result[0].length>0){
+      data ={
+        len : result[0].length,
+        list : result[0],
+        msg : "success"
+      };
+    }else{
+      data = {
+        msg : "noData"
+      }
+    }
+
+    res.json(data);
+  });
+});
+
+
+/*userManagerList*/
+router.get('/userManagerList/:category_id/:grade', function(req, res, next) {
+  var grade = req.params.grade;
+  var category_id = req.params.category_id;
+  var srchType = req.query.srchType;
+  var srchText = req.query.srchText;
+  if(req.query.srchType==null) srchType = 0;
+  var count = 3;
+  var param=[
+    srchType,srchText,category_id,grade,0,count
+  ];
+    userDao.selectManagerOptions(param,function(result){
+      res.render('user/userManagerList', {user : req.user, grade : grade, userList : result[0],srchType:srchType,srchText:srchText});
+    });
+});
+//마이페이지 회원정보수정
+router.get('/edit',function(req,res,next){
+  userDao.FindGrade(req.user.id, req.user.category_id, function(result){
+      userDao.SelectUserInfo(req.user.id,function(rows){
+        fs.stat('../public/profileImage/'+req.user.id+'_Profile.jpg',function(err,data){
+            var not_exist;
+            if(err) not_exist=err;
+            res.render('user/edit',{ user:req.user, message:req.flash('error'), grade:result, profileImg:not_exist });
+        });
+      });
+    });
+  });
+
 
 router.post('/edit',function(req,res,next){
   if (req.body.passwd != req.body.passwdCheck) {
@@ -37,6 +173,10 @@ router.post('/edit',function(req,res,next){
       return res.redirect('/users/edit');
     }
   });
+});
+
+router.post('/profile',upload.any(),function(req,res,next){
+  return res.redirect('/users/edit');
 });
 
 module.exports = router;
